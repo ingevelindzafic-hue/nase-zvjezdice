@@ -531,8 +531,9 @@ function load() {
 // Uklanja base64 slike (prevelike za JSONBin free plan) prije slanja na cloud
 function cloudSafeData() {
   var safe = JSON.parse(JSON.stringify(appData)); // duboka kopija
+  delete safe.parentImg; // Ukloni sliku roditelja
   if(safe.children) {
-    safe.children.forEach(c => { delete c.img; });
+    safe.children.forEach(c => { delete c.img; }); // Ukloni slike djece
   }
   return safe;
 }
@@ -565,6 +566,7 @@ function syncFromCloud(onDone) {
       var cloud = resp.record || resp;
       if(cloud && cloud.children) {
         var local = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        // Sacuvaj slike djece iz lokalnih podataka
         cloud.children.forEach((cc, i) => {
           if(local && local.children && local.children[i] && local.children[i].img) {
             cc.img = local.children[i].img;
@@ -572,6 +574,11 @@ function syncFromCloud(onDone) {
             cc.img = appData.children[i].img;
           }
         });
+        // Sacuvaj sliku roditelja iz lokalnih podataka
+        if(!cloud.parentImg) {
+          if(local && local.parentImg) cloud.parentImg = local.parentImg;
+          else if(appData.parentImg) cloud.parentImg = appData.parentImg;
+        }
         appData = Object.assign(appData, cloud);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
       }
@@ -587,12 +594,13 @@ function syncFromCloud(onDone) {
 function startAutoSync() {
   if(_syncTimer) clearInterval(_syncTimer);
   _syncTimer = setInterval(() => {
-    // Samo osviježi podatke ako korisnik ne radi nista (na home screenu)
-    var homeActive = document.getElementById('homeScreen').classList.contains('active');
-    var parentActive = document.getElementById('parentScreen').classList.contains('active');
-    if(homeActive || parentActive) {
-      syncFromCloud(() => { if(homeActive) renderHome(); if(parentActive) renderParent(); });
-    }
+    // Uvijek sinhronizuj, bez obzira na aktivan ekran
+    syncFromCloud(() => {
+      var homeActive = document.getElementById('homeScreen').classList.contains('active');
+      var parentActive = document.getElementById('parentScreen').classList.contains('active');
+      if(homeActive) renderHome();
+      if(parentActive) renderParent();
+    });
   }, SYNC_INTERVAL);
 }
 
