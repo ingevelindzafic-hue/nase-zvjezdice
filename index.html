@@ -294,6 +294,8 @@
 
     <button class="tab-btn" onclick="switchTab('rewards',this)">🎁 Prodavnica</button>
 
+    <button class="tab-btn" onclick="switchTab('sync',this)">☁️ Sync</button>
+
   </div>
 
   <div id="tab-approvals" class="tab-panel active"><div id="approvalList"></div></div>
@@ -303,6 +305,25 @@
   <div id="tab-tasks" class="tab-panel"><div id="tasksContent"></div></div>
 
   <div id="tab-rewards" class="tab-panel"><div id="rewardsContent"></div></div>
+
+  <div id="tab-sync" class="tab-panel">
+    <div class="manage-section" style="text-align:center; padding:25px 15px;">
+      <div style="font-size:2rem; margin-bottom:10px;">☁️</div>
+      <h3 style="margin-bottom:8px;">Sinhronizacija podataka</h3>
+      <p style="font-size:0.85rem; color:var(--muted); margin-bottom:20px;">
+        Pritisnite dugme da pošaljete sve podatke (bodovi, šifre, zadaci) na cloud,
+        kako bi se odmah prikazali na svim telefonima.
+      </p>
+      <button id="forceSyncBtn" onclick="forceSyncToCloud()" style="
+        background: linear-gradient(135deg, var(--purple), var(--blue));
+        color: white; border: none; padding: 15px 30px;
+        border-radius: 16px; font-weight: 900; font-size: 1rem;
+        cursor: pointer; width: 100%; max-width: 300px;
+        box-shadow: 0 4px 15px rgba(168,85,247,0.4);
+      ">🔄 Pošalji na cloud</button>
+      <div id="forceSyncStatus" style="margin-top:15px; font-weight:700; font-size:0.85rem;"></div>
+    </div>
+  </div>
 
 </div>
 
@@ -573,6 +594,40 @@ function setSyncStatus(s) {
   if(s === 'saving')  { el.textContent = '🔄 Sinhronizacija...'; el.style.color = '#D97706'; }
   if(s === 'offline') { el.textContent = '⚠️ Bez interneta'; el.style.color = '#DC2626'; }
 }
+
+function forceSyncToCloud() {
+  var btn = document.getElementById('forceSyncBtn');
+  var status = document.getElementById('forceSyncStatus');
+  btn.disabled = true;
+  btn.textContent = '⏳ Slanje...';
+  status.textContent = '';
+  status.style.color = 'var(--muted)';
+
+  fetch(SYNC_URL, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_KEY },
+    body: JSON.stringify(appData)
+  })
+  .then(r => {
+    if(!r.ok) throw new Error('Greška');
+    return r.json();
+  })
+  .then(() => {
+    btn.disabled = false;
+    btn.textContent = '🔄 Pošalji na cloud';
+    status.textContent = '✅ Uspješno sinhronizovano! Ostali telefoni ce preuzeti podatke za 15 sekundi.';
+    status.style.color = '#059669';
+    setSyncStatus('ok');
+  })
+  .catch(() => {
+    btn.disabled = false;
+    btn.textContent = '🔄 Pošalji na cloud';
+    status.textContent = '⚠️ Greška! Provjeri internet vezu.';
+    status.style.color = '#DC2626';
+    setSyncStatus('offline');
+  });
+}
+
 
 function renderHome() {
 
