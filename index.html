@@ -216,6 +216,8 @@
 
   </button>
 
+  <div id="syncStatus" style="margin-top:20px; font-size:0.75rem; font-weight:700; color:#D97706;">🔄 Sinhronizacija...</div>
+
 </div>
 
 <div id="childScreen" class="screen">
@@ -307,8 +309,11 @@
 <script>
 
 var STORAGE_KEY = 'zvjezdice_r1';
-
-var SYNC_URL = 'https://kvdb.io/N9H3qZ9pX4rZ9pX4rZ9pX4/selma';
+var JSONBIN_ID = '69f67d6e36566621a81a84cd';
+var JSONBIN_KEY = '$2a$10$i/yVB7aOnK8HNtG0gnltC.Far5Zy2/6lFkirgNIdKl06RkPsilXoC';
+var SYNC_URL = 'https://api.jsonbin.io/v3/b/' + JSONBIN_ID;
+var SYNC_INTERVAL = 15000;
+var _syncTimer = null;
 
 var DEF_YOUNG = [
 
@@ -503,11 +508,70 @@ function load() {
 }
 
 function save() {
-
   localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+  setSyncStatus('saving');
+  fetch(SYNC_URL, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Master-Key': JSONBIN_KEY
+    },
+    body: JSON.stringify(appData)
+  })
+    .then(() => setSyncStatus('ok'))
+    .catch(() => setSyncStatus('offline'));
+}
 
-  fetch(SYNC_URL, {method:'POST', body:JSON.stringify(appData)}).catch(e=>{});
+function syncFromCloud(onDone) {
+  setSyncStatus('saving');
+  fetch(SYNC_URL + '/latest', {
+    headers: { 'X-Master-Key': JSONBIN_KEY }
+  })
+    .then(r => {
+      if(!r.ok) throw new Error('no data');
+      return r.json();
+    })
+    .then(resp => {
+      var cloud = resp.record || resp;
+      if(cloud && cloud.children) {
+        var local = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+        cloud.children.forEach((cc, i) => {
+          if(local && local.children && local.children[i] && local.children[i].img) {
+            cc.img = local.children[i].img;
+          } else if(appData.children[i] && appData.children[i].img) {
+            cc.img = appData.children[i].img;
+          }
+        });
+        appData = Object.assign(appData, cloud);
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+      }
+      setSyncStatus('ok');
+      if(onDone) onDone();
+    })
+    .catch(() => {
+      setSyncStatus('offline');
+      if(onDone) onDone();
+    });
+}
 
+function startAutoSync() {
+  if(_syncTimer) clearInterval(_syncTimer);
+  _syncTimer = setInterval(() => {
+    // Samo osviježi podatke ako korisnik ne radi nista (na home screenu)
+    var homeActive = document.getElementById('homeScreen').classList.contains('active');
+    var parentActive = document.getElementById('parentScreen').classList.contains('active');
+    if(homeActive || parentActive) {
+      syncFromCloud(() => { if(homeActive) renderHome(); if(parentActive) renderParent(); });
+    }
+  }, SYNC_INTERVAL);
+}
+
+function setSyncStatus(s) {
+  var el = document.getElementById('syncStatus');
+  if(!el) return;
+  if(s === 'ok')      { el.textContent = '✅ Spojeno'; el.style.color = '#059669'; }
+  if(s === 'saving')  { el.textContent = '🔄 Sinhronizacija...'; el.style.color = '#D97706'; }
+  if(s === 'offline') { el.textContent = '⚠️ Bez interneta'; el.style.color = '#DC2626'; }
 }
 
 function renderHome() {
@@ -1297,7 +1361,11 @@ function showAddTaskModal(ci, freq) {
 
 }
 
-window.onload = load;
+window.onload = function() {
+  load(); // Ucitaj lokalne podatke odmah
+  syncFromCloud(() => { renderHome(); }); // Zatim povuci sa interneta
+  startAutoSync(); // Pokreni automatsko osvjezavanje svakih 15s
+};
 
 </script>
 
