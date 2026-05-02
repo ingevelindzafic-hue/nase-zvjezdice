@@ -528,6 +528,15 @@ function load() {
 
 }
 
+// Uklanja base64 slike (prevelike za JSONBin free plan) prije slanja na cloud
+function cloudSafeData() {
+  var safe = JSON.parse(JSON.stringify(appData)); // duboka kopija
+  if(safe.children) {
+    safe.children.forEach(c => { delete c.img; });
+  }
+  return safe;
+}
+
 function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
   setSyncStatus('saving');
@@ -537,7 +546,7 @@ function save() {
       'Content-Type': 'application/json',
       'X-Master-Key': JSONBIN_KEY
     },
-    body: JSON.stringify(appData)
+    body: JSON.stringify(cloudSafeData())
   })
     .then(() => setSyncStatus('ok'))
     .catch(() => setSyncStatus('offline'));
@@ -606,7 +615,7 @@ function forceSyncToCloud() {
   fetch(SYNC_URL, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_KEY },
-    body: JSON.stringify(appData)
+    body: JSON.stringify(cloudSafeData())
   })
   .then(r => {
     if(!r.ok) throw new Error('Greška');
