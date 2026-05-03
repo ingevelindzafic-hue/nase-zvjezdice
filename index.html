@@ -231,8 +231,6 @@
 
     <button class="back-btn" onclick="goHome()"><- Nazad</button>
 
-
-
     <div style="width:40px"></div>
 
   </div>
@@ -490,6 +488,8 @@ function checkResets() {
 
   var curM = new Date().getMonth();
 
+  var curD = new Date().toDateString();
+
   if(appData.lastWeek && appData.lastWeek !== curW) {
 
     // Save to archive before reset
@@ -510,11 +510,35 @@ function checkResets() {
 
     appData.pending = [];
 
+  } else if(appData.lastDay && appData.lastDay !== curD) {
+
+    appData.children.forEach(c => {
+
+      if(c.comp) {
+
+        Object.keys(c.comp).forEach(tid => {
+
+          var t = c.tasks.find(x => x.id == tid);
+
+          if(t && t.freq === 'daily') {
+
+            delete c.comp[tid];
+
+          }
+
+        });
+
+      }
+
+    });
+
   }
 
   appData.lastWeek = curW;
 
   appData.lastMonth = curM;
+
+  appData.lastDay = curD;
 
   save();
 
@@ -798,7 +822,7 @@ function renderChild() {
 
   var c = appData.children[window.curIdx];
 
-  var goal = appData.weeklyGoal || 50;
+  var goal = c.tasks.reduce((s, t) => s + (t.freq === 'daily' ? t.pts * 7 : t.pts), 0);
 
 
 
@@ -1043,9 +1067,11 @@ function renderOverview() {
 
   var overview = document.getElementById('overviewContent');
 
-  var goal = appData.weeklyGoal || 50;
+  var html = appData.children.map(c => {
 
-  var html = appData.children.map(c => `
+    var goal = c.tasks.reduce((s, t) => s + (t.freq === 'daily' ? t.pts * 7 : t.pts), 0);
+
+    return `
 
     <div class="manage-section">
 
@@ -1063,7 +1089,7 @@ function renderOverview() {
 
     </div>
 
-  `).join('');
+  }).join('');
 
   if(appData.archive && appData.archive.length > 0) {
 
