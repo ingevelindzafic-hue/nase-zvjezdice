@@ -226,7 +226,7 @@
 
 <div id="homeScreen" class="screen active">
 
-  <h1 class="home-title">⭐Nase Zvjezdice <small style="font-size:0.5em; opacity:0.5; vertical-align:middle;">v5.1</small></h1>
+  <h1 class="home-title">⭐Nase Zvjezdice <small style="font-size:0.5em; opacity:0.5; vertical-align:middle;">v5.2</small></h1>
 
   <p style="color:var(--muted); margin-bottom: 30px;">Ko si danas?</p>
 
@@ -305,7 +305,7 @@
 
     <button onclick="goHome()" style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer"><-</button>
 
-    <div><h2 style="font-family:'Baloo 2'">Roditeljski prikaz <small style="font-size:0.6em; opacity:0.7;">v5.1</small></h2><p id="parentHeaderDate" style="font-size:0.8rem; opacity:0.8"></p></div>
+    <div><h2 style="font-family:'Baloo 2'">Roditeljski prikaz <small style="font-size:0.6em; opacity:0.7;">v5.2</small></h2><p id="parentHeaderDate" style="font-size:0.8rem; opacity:0.8"></p></div>
 
   </div>
 
@@ -321,6 +321,10 @@
 
     <button class="tab-btn" onclick="switchTab('sync',this)">☁️ Sync</button>
 
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; background:rgba(255,255,255,0.1); padding:10px; border-radius:10px;">
+      <span id="lastSaveTime" style="font-size:0.7rem; opacity:0.8;">Status: Spreman</span>
+      <button onclick="save()" style="background:var(--green); color:white; border:none; padding:5px 12px; border-radius:8px; font-size:0.7rem; font-weight:bold; cursor:pointer;">Snimi na Cloud</button>
+    </div>
   </div>
 
   <div id="tab-approvals" class="tab-panel active"><div id="approvalList"></div></div>
@@ -623,6 +627,10 @@ function cloudSafeData() {
 
 function save() {
   appData.lastSync = Date.now();
+  var timeStr = new Date().toLocaleTimeString();
+  var statusEl = document.getElementById('lastSaveTime');
+  if(statusEl) statusEl.textContent = 'Snimanje... (' + timeStr + ')';
+  
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
   } catch(e) {
@@ -634,8 +642,14 @@ function save() {
   }
   setSyncStatus('saving');
   db.ref(DB_REF).set(cloudSafeData())
-    .then(() => setSyncStatus('ok'))
-    .catch(() => setSyncStatus('offline'));
+    .then(() => {
+        setSyncStatus('ok');
+        if(statusEl) statusEl.textContent = 'Snimljeno u ' + timeStr;
+    })
+    .catch(() => {
+        setSyncStatus('offline');
+        if(statusEl) statusEl.textContent = 'Greška pri snimanju!';
+    });
 }
 
 function mergeCloudData(cloud) {
@@ -652,6 +666,11 @@ function mergeCloudData(cloud) {
         cc.img = appData.children[i].img;
 
       cc.tasks = ensureArray(cc.tasks);
+      // DODATNA ZAŠTITA: Ako cloud šalje prazne zadatke, a mi imamo lokalne, zadrži lokalne
+      if(cc.tasks.length === 0 && appData.children[i] && appData.children[i].tasks && appData.children[i].tasks.length > 0) {
+          cc.tasks = appData.children[i].tasks;
+      }
+      
       cc.rewards = ensureArray(cc.rewards);
       cc.weekTasks = ensureArray(cc.weekTasks);
       if(!cc.comp) cc.comp = {};
