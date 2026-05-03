@@ -12,6 +12,10 @@
 
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Baloo+2:wght@400;600;700;800&display=swap" rel="stylesheet">
 
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
 <style>
 
   :root {
@@ -307,22 +311,44 @@
   <div id="tab-rewards" class="tab-panel"><div id="rewardsContent"></div></div>
 
   <div id="tab-sync" class="tab-panel">
-    <div class="manage-section" style="text-align:center; padding:25px 15px;">
-      <div style="font-size:2rem; margin-bottom:10px;">☁️</div>
-      <h3 style="margin-bottom:8px;">Sinhronizacija podataka</h3>
-      <p style="font-size:0.85rem; color:var(--muted); margin-bottom:20px;">
-        Pritisnite dugme da pošaljete sve podatke (bodovi, šifre, zadaci) na cloud,
-        kako bi se odmah prikazali na svim telefonima.
+
+    <!-- Slika roditelja -->
+    <div class="manage-section" style="text-align:center; padding:20px 15px; margin-bottom:12px;">
+      <div style="font-size:1.5rem; margin-bottom:6px;">📸</div>
+      <h3 style="margin-bottom:8px;">Slika roditelja</h3>
+      <p style="font-size:0.82rem; color:var(--muted); margin-bottom:14px;">
+        Dodajte svoju fotografiju — čuvat će se lokalno na ovom telefonu.
+      </p>
+      <input type="file" id="parentPhotoInput" accept="image/*" capture="environment"
+        style="display:none" onchange="handleParentPhoto(this)">
+      <button onclick="uploadParentPhoto()" style="
+        background: linear-gradient(135deg, var(--pink), var(--orange));
+        color: white; border: none; padding: 12px 24px;
+        border-radius: 14px; font-weight: 900; font-size: 0.95rem;
+        cursor: pointer; width: 100%; max-width: 280px;">
+        📷 Dodaj / Promijeni sliku
+      </button>
+    </div>
+
+    <!-- Firebase sync -->
+    <div class="manage-section" style="text-align:center; padding:20px 15px;">
+      <div style="font-size:1.5rem; margin-bottom:6px;">⚡</div>
+      <h3 style="margin-bottom:8px;">Firebase Real-Time Sync</h3>
+      <p style="font-size:0.82rem; color:var(--muted); margin-bottom:14px;">
+        Aplikacija je spojena na Firebase — promjene se šalju <strong>odmah</strong> svim telefonima.
+        Koristite dugme samo ako mislite da nešto nije sinhronizovano.
       </p>
       <button id="forceSyncBtn" onclick="forceSyncToCloud()" style="
         background: linear-gradient(135deg, var(--purple), var(--blue));
-        color: white; border: none; padding: 15px 30px;
-        border-radius: 16px; font-weight: 900; font-size: 1rem;
-        cursor: pointer; width: 100%; max-width: 300px;
-        box-shadow: 0 4px 15px rgba(168,85,247,0.4);
-      ">🔄 Pošalji na cloud</button>
-      <div id="forceSyncStatus" style="margin-top:15px; font-weight:700; font-size:0.85rem;"></div>
+        color: white; border: none; padding: 13px 26px;
+        border-radius: 14px; font-weight: 900; font-size: 0.95rem;
+        cursor: pointer; width: 100%; max-width: 280px;
+        box-shadow: 0 4px 15px rgba(168,85,247,0.4);">
+        🔄 Pošalji na cloud ručno
+      </button>
+      <div id="forceSyncStatus" style="margin-top:12px; font-weight:700; font-size:0.82rem;"></div>
     </div>
+
   </div>
 
 </div>
@@ -330,11 +356,20 @@
 <script>
 
 var STORAGE_KEY = 'zvjezdice_r1';
-var JSONBIN_ID = '69f67d6e36566621a81a84cd';
-var JSONBIN_KEY = '$2a$10$i/yVB7aOnK8HNtG0gnltC.Far5Zy2/6lFkirgNIdKl06RkPsilXoC';
-var SYNC_URL = 'https://api.jsonbin.io/v3/b/' + JSONBIN_ID;
-var SYNC_INTERVAL = 15000;
-var _syncTimer = null;
+
+// Firebase konfiguracija
+const firebaseConfig = {
+  apiKey: "AIzaSyBv8w7ozzvtRucc_zoKvT_wIlHQ9auvWQI",
+  authDomain: "nase-zvjezdice.firebaseapp.com",
+  databaseURL: "https://nase-zvjezdice-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "nase-zvjezdice",
+  storageBucket: "nase-zvjezdice.firebasestorage.app",
+  messagingSenderId: "215217471946",
+  appId: "1:215217471946:web:41ee92ed8c1a187bd84f33"
+};
+firebase.initializeApp(firebaseConfig);
+var db = firebase.database();
+var DB_REF = '/zvjezdice';
 
 var DEF_YOUNG = [
 
@@ -528,86 +563,60 @@ function load() {
 
 }
 
-// Uklanja base64 slike (prevelike za JSONBin free plan) prije slanja na cloud
+// Uklanja base64 slike (prevelike za cloud) prije slanja na Firebase
 function cloudSafeData() {
-  var safe = JSON.parse(JSON.stringify(appData)); // duboka kopija
-  delete safe.parentImg; // Ukloni sliku roditelja
-  if(safe.children) {
-    safe.children.forEach(c => { delete c.img; }); // Ukloni slike djece
-  }
+  var safe = JSON.parse(JSON.stringify(appData));
+  delete safe.parentImg;
+  if(safe.children) safe.children.forEach(c => { delete c.img; });
   return safe;
 }
 
 function save() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
   setSyncStatus('saving');
-  fetch(SYNC_URL, {
-    method: 'PUT',
-    headers: {
-      'Content-Type': 'application/json',
-      'X-Master-Key': JSONBIN_KEY
-    },
-    body: JSON.stringify(cloudSafeData())
-  })
+  db.ref(DB_REF).set(cloudSafeData())
     .then(() => setSyncStatus('ok'))
     .catch(() => setSyncStatus('offline'));
 }
 
-function syncFromCloud(onDone) {
-  setSyncStatus('saving');
-  fetch(SYNC_URL + '/latest', {
-    headers: { 'X-Master-Key': JSONBIN_KEY }
-  })
-    .then(r => {
-      if(!r.ok) throw new Error('no data');
-      return r.json();
-    })
-    .then(resp => {
-      var cloud = resp.record || resp;
-      if(cloud && cloud.children) {
-        var local = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-        // Sacuvaj slike djece iz lokalnih podataka
-        cloud.children.forEach((cc, i) => {
-          if(local && local.children && local.children[i] && local.children[i].img) {
-            cc.img = local.children[i].img;
-          } else if(appData.children[i] && appData.children[i].img) {
-            cc.img = appData.children[i].img;
-          }
-        });
-        // Sacuvaj sliku roditelja iz lokalnih podataka
-        if(!cloud.parentImg) {
-          if(local && local.parentImg) cloud.parentImg = local.parentImg;
-          else if(appData.parentImg) cloud.parentImg = appData.parentImg;
-        }
-        appData = Object.assign(appData, cloud);
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
-      }
-      setSyncStatus('ok');
-      if(onDone) onDone();
-    })
-    .catch(() => {
-      setSyncStatus('offline');
-      if(onDone) onDone();
+function mergeCloudData(cloud) {
+  if(cloud && cloud.children) {
+    var local = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    // Sacuvaj slike djece iz lokalnih podataka
+    cloud.children.forEach((cc, i) => {
+      if(local && local.children && local.children[i] && local.children[i].img)
+        cc.img = local.children[i].img;
+      else if(appData.children[i] && appData.children[i].img)
+        cc.img = appData.children[i].img;
     });
+    // Sacuvaj sliku roditelja iz lokalnih podataka
+    if(!cloud.parentImg) {
+      if(local && local.parentImg) cloud.parentImg = local.parentImg;
+      else if(appData.parentImg) cloud.parentImg = appData.parentImg;
+    }
+    appData = Object.assign({}, appData, cloud);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+  }
 }
 
-function startAutoSync() {
-  if(_syncTimer) clearInterval(_syncTimer);
-  _syncTimer = setInterval(() => {
-    // Uvijek sinhronizuj, bez obzira na aktivan ekran
-    syncFromCloud(() => {
+function startFirebaseSync() {
+  db.ref(DB_REF).on('value', (snapshot) => {
+    var cloud = snapshot.val();
+    if(cloud && cloud.children) {
+      mergeCloudData(cloud);
       var homeActive = document.getElementById('homeScreen').classList.contains('active');
       var parentActive = document.getElementById('parentScreen').classList.contains('active');
       if(homeActive) renderHome();
       if(parentActive) renderParent();
-    });
-  }, SYNC_INTERVAL);
+    }
+    setSyncStatus('ok');
+  }, () => setSyncStatus('offline'));
 }
 
 function setSyncStatus(s) {
   var el = document.getElementById('syncStatus');
   if(!el) return;
-  if(s === 'ok')      { el.textContent = '✅ Spojeno'; el.style.color = '#059669'; }
+  if(s === 'ok')      { el.textContent = '✅ Spojeno ⚡'; el.style.color = '#059669'; }
   if(s === 'saving')  { el.textContent = '🔄 Sinhronizacija...'; el.style.color = '#D97706'; }
   if(s === 'offline') { el.textContent = '⚠️ Bez interneta'; el.style.color = '#DC2626'; }
 }
@@ -618,21 +627,12 @@ function forceSyncToCloud() {
   btn.disabled = true;
   btn.textContent = '⏳ Slanje...';
   status.textContent = '';
-  status.style.color = 'var(--muted)';
 
-  fetch(SYNC_URL, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json', 'X-Master-Key': JSONBIN_KEY },
-    body: JSON.stringify(cloudSafeData())
-  })
-  .then(r => {
-    if(!r.ok) throw new Error('Greška');
-    return r.json();
-  })
+  db.ref(DB_REF).set(cloudSafeData())
   .then(() => {
     btn.disabled = false;
     btn.textContent = '🔄 Pošalji na cloud';
-    status.textContent = '✅ Uspješno sinhronizovano! Ostali telefoni ce preuzeti podatke za 15 sekundi.';
+    status.textContent = '✅ Uspješno! Ostali telefoni vide promjene odmah.';
     status.style.color = '#059669';
     setSyncStatus('ok');
   })
@@ -643,6 +643,26 @@ function forceSyncToCloud() {
     status.style.color = '#DC2626';
     setSyncStatus('offline');
   });
+}
+
+function uploadParentPhoto() {
+  document.getElementById('parentPhotoInput').click();
+}
+
+function handleParentPhoto(input) {
+  var file = input.files[0];
+  if(!file) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    appData.parentImg = e.target.result;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+    // Osvjezi prikaz
+    var pAv = document.getElementById('parentAvatarHome');
+    if(pAv) pAv.innerHTML = '<img src="' + appData.parentImg + '" class="profile-img">';
+    renderParent();
+    alert('✅ Slika roditelja je sacuvana!');
+  };
+  reader.readAsDataURL(file);
 }
 
 
@@ -1435,8 +1455,8 @@ function showAddTaskModal(ci, freq) {
 
 window.onload = function() {
   load(); // Ucitaj lokalne podatke odmah
-  syncFromCloud(() => { renderHome(); }); // Zatim povuci sa interneta
-  startAutoSync(); // Pokreni automatsko osvjezavanje svakih 15s
+  renderHome(); // Prikazi odmah sa lokalnim podacima
+  startFirebaseSync(); // Pokreni Firebase real-time sync
 };
 
 </script>
