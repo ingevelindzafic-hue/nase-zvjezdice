@@ -255,7 +255,7 @@
 
   <div class="reward-bar-wrap">
 
-    <div class="reward-bar-label"><span>Sedmicni cilj</span><span id="rewardBarLabel">0 / 50 ⭐</span></div>
+    <div class="reward-bar-label"><span>Dnevni cilj</span><span id="rewardBarLabel">0 / 50 ⭐</span></div>
 
     <div class="reward-bar-track"><div id="rewardBarFill" class="reward-bar-fill" style="width:0%"></div></div>
 
@@ -266,10 +266,6 @@
   <div class="section-title">📝 Dnevni zadaci</div>
 
   <div class="task-list" id="dailyTaskList"></div>
-
-  <div class="section-title"> Sedmicni zadaci</div>
-
-  <div class="task-list" id="weeklyTaskList"></div>
 
   <div class="section-title">🎁 Prodavnica nagrada</div>
 
@@ -398,9 +394,7 @@ var DEF_YOUNG = [
 
   { id:'d1', name:'Pospremanje kreveta', emoji:'🧹', pts:8, freq:'daily', desc:'Namjesti krevet' },
 
-  { id:'d2', name:'Pranje zuba', emoji:'d', pts:5, freq:'daily', desc:'Jutro i vecer' },
-
-  { id:'w1', name:'Zalij cvijece', emoji:'d', pts:10, freq:'weekly', desc:'Jednom sedmicno' }
+  { id:'d2', name:'Pranje zuba', emoji:'d', pts:5, freq:'daily', desc:'Jutro i vecer' }
 
 ];
 
@@ -432,9 +426,7 @@ var DEF_OLDER = [
 
   { id:'o1', name:'Pospremanje sobe', emoji:'🧹', pts:10, freq:'daily', desc:'Sredi sve igracke' },
 
-  { id:'o2', name:'Domaci zadatak', emoji:'📝', pts:15, freq:'daily', desc:'Zavrsi sve obaveze' },
-
-  { id:'w1', name:'Peglanje', emoji:'👕', pts:15, freq:'weekly', desc:'Svoja odjeca' }
+  { id:'o2', name:'Domaci zadatak', emoji:'📝', pts:15, freq:'daily', desc:'Zavrsi sve obaveze' }
 
 ];
 
@@ -484,25 +476,23 @@ function getWeekKey() {
 
 function checkResets() {
 
-  var curW = getWeekKey();
-
   var curM = new Date().getMonth();
 
   var curD = new Date().toDateString();
 
-  if(appData.lastWeek && appData.lastWeek !== curW) {
+  if(appData.lastDay && appData.lastDay !== curD) {
 
     // Save to archive before reset
 
-    var entry = { type:'week', key: appData.lastWeek, scores: [] };
+    var entry = { type:'day', key: appData.lastDay, scores: [] };
 
     appData.children.forEach(c => {
 
-      entry.scores.push({ name: c.name, pts: c.pts.weekly });
+      entry.scores.push({ name: c.name, pts: c.pts.daily });
 
-      c.pts.weekly = 0; // Reset weekly
+      c.pts.daily = 0; // Reset pts for new day
 
-      c.comp = {}; // Clear completions for new week
+      c.comp = {}; // Clear completions for new day
 
     });
 
@@ -510,31 +500,7 @@ function checkResets() {
 
     appData.pending = [];
 
-  } else if(appData.lastDay && appData.lastDay !== curD) {
-
-    appData.children.forEach(c => {
-
-      if(c.comp) {
-
-        Object.keys(c.comp).forEach(tid => {
-
-          var t = c.tasks.find(x => x.id == tid);
-
-          if(t && t.freq === 'daily') {
-
-            delete c.comp[tid];
-
-          }
-
-        });
-
-      }
-
-    });
-
   }
-
-  appData.lastWeek = curW;
 
   appData.lastMonth = curM;
 
@@ -564,7 +530,8 @@ function load() {
         if(!c.rewards) c.rewards = [];
         if(!c.weekTasks) c.weekTasks = [];
         if(!c.comp) c.comp = {};
-        if(!c.pts) c.pts = { weekly:0, shop:0 };
+                if(!c.pts) c.pts = { daily:0, shop:0, total:0 };
+        if(c.pts.weekly !== undefined) { c.pts.daily = c.pts.daily || c.pts.weekly || 0; delete c.pts.weekly; }
 
         def.forEach(dt => {
 
@@ -585,6 +552,20 @@ function load() {
     } catch(e){}
 
   }
+
+  // Ensure tasks and pts are ALWAYS initialized for all children (fixes fresh start crash)
+  appData.children.forEach((c, i) => {
+    var def = (i === 0) ? DEF_YOUNG : DEF_OLDER;
+    if(!c.tasks) c.tasks = JSON.parse(JSON.stringify(def));
+    if(!c.rewards) c.rewards = [];
+    if(!c.weekTasks) c.weekTasks = [];
+    if(!c.comp) c.comp = {};
+            if(!c.pts) c.pts = { daily:0, shop:0, total:0 };
+        if(c.pts.weekly !== undefined) { c.pts.daily = c.pts.daily || c.pts.weekly || 0; delete c.pts.weekly; }
+    def.forEach(dt => {
+      if(!c.tasks.find(st => st.id === dt.id)) c.tasks.push(dt);
+    });
+  });
 
   checkResets();
 
@@ -630,7 +611,7 @@ function mergeCloudData(cloud) {
       if(!cc.rewards) cc.rewards = [];
       if(!cc.weekTasks) cc.weekTasks = [];
       if(!cc.comp) cc.comp = {};
-      if(!cc.pts) cc.pts = { weekly:0, shop:0, total:0 };
+      if(!cc.pts) cc.pts = { daily:0, shop:0, total:0 };
     });
     // Sacuvaj sliku roditelja iz lokalnih podataka
     if(!cloud.parentImg) {
@@ -786,7 +767,7 @@ function renderHome() {
 
       <div class="profile-name">${c.name}</div>
 
-      <div class="profile-points-badge">⭐${c.pts.weekly}</div>
+      <div class="profile-points-badge">⭐${c.pts.daily}</div>
 
     </div>
 
@@ -822,7 +803,7 @@ function renderChild() {
 
   var c = appData.children[window.curIdx];
 
-  var goal = c.tasks.reduce((s, t) => s + (t.freq === 'daily' ? t.pts * 7 : t.pts), 0);
+  var goal = c.tasks.reduce((s, t) => s + t.pts, 0);
 
 
 
@@ -847,25 +828,19 @@ function renderChild() {
 
   document.getElementById('childNameBig').textContent = c.name;
 
-  var pct = Math.min(100, Math.round((c.pts.weekly / goal) * 100));
+  var pct = Math.min(100, Math.round((c.pts.daily / goal) * 100));
 
   document.getElementById('rewardBarFill').style.width = pct + '%';
 
-  document.getElementById('rewardBarLabel').textContent = c.pts.weekly + ' / ' + goal + ' ⭐';
+  document.getElementById('rewardBarLabel').textContent = c.pts.daily + ' / ' + goal + ' ⭐';
 
   // Update stats grid
-  var dailyMax = c.tasks.filter(t => t.freq === 'daily').reduce((s, t) => s + t.pts, 0);
-  var dailyPoints = c.tasks.filter(t => t.freq === 'daily' && c.comp[t.id] === 'done').reduce((s, t) => s + t.pts, 0);
   var streak = c.streak || 0;
 
   document.getElementById('statsGrid').innerHTML = `
     <div class="stat-card">
-      <span class="stat-value">📝 ${dailyPoints} / ${dailyMax}</span>
+      <span class="stat-value">🎯 ${c.pts.daily} / ${goal}</span>
       <span class="stat-label">Danas</span>
-    </div>
-    <div class="stat-card">
-      <span class="stat-value">🎯 ${c.pts.weekly} / ${goal}</span>
-      <span class="stat-label">Sedmica</span>
     </div>
     <div class="stat-card highlight">
       <span class="stat-value">💰 ${c.pts.total} ⭐</span>
@@ -878,27 +853,15 @@ function renderChild() {
   `;
 
   var spirit = c.tasks.filter(t => t.cat === 'spirit');
-  var daily = c.tasks.filter(t => t.freq === 'daily' && t.cat !== 'spirit');
-
-  var weekly = c.tasks.filter(t => t.freq === 'weekly');
+  var daily = c.tasks.filter(t => t.cat !== 'spirit');
 
   var html = '';
-
   if(spirit.length > 0) {
-
     html += `<div class="section-title" style="color:#B45309">✨ Duhovni put (Premium bodovi)</div>`;
-
     html += `<div class="task-list">${spirit.map(t => renderTaskCard(t, c, true)).join('')}</div>`;
-
   }
-
   html += `<div class="section-title">📝 Dnevni zadaci</div>`;
-
   html += `<div class="task-list">${daily.map(t => renderTaskCard(t, c)).join('')}</div>`;
-
-  html += `<div class="section-title"> Sedmicni zadaci</div>`;
-
-  html += `<div class="task-list">${weekly.map(t => renderTaskCard(t, c)).join('')}</div>`;
 
   document.getElementById('dailyTaskList').innerHTML = html;
 
@@ -1069,7 +1032,7 @@ function renderOverview() {
 
   var html = appData.children.map(c => {
 
-    var goal = c.tasks.reduce((s, t) => s + (t.freq === 'daily' ? t.pts * 7 : t.pts), 0);
+    var goal = c.tasks.reduce((s, t) => s + t.pts, 0);
 
     return `
 
@@ -1083,12 +1046,12 @@ function renderOverview() {
 
       </div>
 
-      <div style="font-size:0.9rem; color:var(--muted)">Sedmica: <b>${c.pts.weekly}</b> / ${goal} bodova</div>
+      <div style="font-size:0.9rem; color:var(--muted)">Danas: <b>${c.pts.daily}</b> / ${goal} bodova</div>
 
-      <div class="reward-bar-track" style="height:8px; margin-top:5px"><div class="reward-bar-fill" style="width:${Math.min(100,(c.pts.weekly/goal)*100)}%"></div></div>
+      <div class="reward-bar-track" style="height:8px; margin-top:5px"><div class="reward-bar-fill" style="width:${Math.min(100,(c.pts.daily/goal)*100)}%"></div></div>
 
     </div>
-
+  `;
   }).join('');
 
   if(appData.archive && appData.archive.length > 0) {
@@ -1099,7 +1062,7 @@ function renderOverview() {
 
       <div class="manage-section" style="background:#F8FAFC; border-style:dashed">
 
-        <div style="font-size:0.8rem; font-weight:800; color:var(--purple); margin-bottom:8px">SEDIMCA: ${entry.key}</div>
+        <div style="font-size:0.8rem; font-weight:800; color:var(--purple); margin-bottom:8px">DAN: ${entry.key}</div>
 
         ${entry.scores.map(s => `
 
@@ -1229,21 +1192,7 @@ function renderManage() {
 
   html += `
 
-    <div class="manage-section">
 
-      <h3>🎯 Postavljanje Cilja</h3>
-
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px">
-
-        <label style="font-size:0.85rem">Sedmicni cilj (bodova):</label>
-
-        <input type="number" id="wGoalInput" value="${appData.weeklyGoal || 50}" onchange="saveGoal()" style="width:80px; padding:5px; border-radius:5px; border:1px solid var(--border)">
-
-      </div>
-
-      <p style="font-size:0.7rem; color:var(--muted); margin-top:5px">Standardno je 50 bodova za sedmicnu nagradu.</p>
-
-    </div>
 
     <div class="manage-section">
 
@@ -1425,7 +1374,7 @@ function approveTask(idx, isYes) {
 
     c.comp[p.tId] = 'done';
 
-    c.pts.weekly += p.pts;
+    c.pts.daily += p.pts;
 
     c.pts.total += p.pts;
 
@@ -1533,22 +1482,6 @@ function showCelebrate(emoji, title, msg) {
 }
 
 function confirmReset() { if(confirm('Obrisati sve podatke?')) { localStorage.removeItem(STORAGE_KEY); location.reload(); } }
-
-function saveGoal() {
-
-  var val = parseInt(document.getElementById('wGoalInput').value);
-
-  if(val && val > 0) {
-
-    appData.weeklyGoal = val;
-
-    save();
-
-    alert('Sedmicni cilj je sada ' + val + ' bodova!');
-
-  }
-
-}
 
 function showAddTaskModal(ci, freq) {
 
