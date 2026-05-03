@@ -1424,7 +1424,7 @@ function askPin(correct, success, title) {
 
       <p>Unesite PIN za nastavak</p>
 
-      <input type="password" id="pInp" class="pin-input" maxlength="4" inputmode="numeric" placeholder="••••">
+      <input type="tel" id="pInp" class="pin-input" maxlength="4" autocomplete="off" style="-webkit-text-security: disc;" placeholder="••••">
 
       <button class="pin-ok" onclick="checkP()">
 
