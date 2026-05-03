@@ -226,7 +226,7 @@
 
 <div id="homeScreen" class="screen active">
 
-  <h1 class="home-title">⭐Nase Zvjezdice <small style="font-size:0.5em; opacity:0.5; vertical-align:middle;">v4.3</small></h1>
+  <h1 class="home-title">⭐Nase Zvjezdice <small style="font-size:0.5em; opacity:0.5; vertical-align:middle;">v5.1</small></h1>
 
   <p style="color:var(--muted); margin-bottom: 30px;">Ko si danas?</p>
 
@@ -305,7 +305,7 @@
 
     <button onclick="goHome()" style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer"><-</button>
 
-    <div><h2 style="font-family:'Baloo 2'">Roditeljski prikaz <small style="font-size:0.6em; opacity:0.7;">v4.3</small></h2><p id="parentHeaderDate" style="font-size:0.8rem; opacity:0.8"></p></div>
+    <div><h2 style="font-family:'Baloo 2'">Roditeljski prikaz <small style="font-size:0.6em; opacity:0.7;">v5.1</small></h2><p id="parentHeaderDate" style="font-size:0.8rem; opacity:0.8"></p></div>
 
   </div>
 
@@ -390,7 +390,7 @@ const firebaseConfig = {
 };
 firebase.initializeApp(firebaseConfig);
 var db = firebase.database();
-var DB_REF = '/zvjezdice';
+var DB_REF = '/zvjezdice_v4';
 
 var DEF_YOUNG = [
 
@@ -573,8 +573,12 @@ function load() {
           var def = (i === 0) ? DEF_YOUNG : DEF_OLDER;
           if(!c.tasks) c.tasks = JSON.parse(JSON.stringify(def));
           // Ne dodajemo automatski zadatke ako vec postoje neki
-          // FORCE NEW IMAGES AND NAMES (important!)
-          c.img = appData.children[i].img;
+          // Poštuj custom slike (ako počinju sa data:image, to je nova slika)
+          if(!c.img || !c.img.startsWith('data:image')) {
+            c.img = appData.children[i].img;
+          }
+          // Ime djeteta možemo ostaviti da se ažurira iz koda ako želite, 
+          // ali ako želite i imena mijenjati, možemo i to zaključati.
           c.name = appData.children[i].name;
         });
       }
