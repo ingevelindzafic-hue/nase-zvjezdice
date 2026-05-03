@@ -602,11 +602,11 @@ function mergeCloudData(cloud) {
       else if(appData.children[i] && appData.children[i].img)
         cc.img = appData.children[i].img;
 
-      if(!cc.tasks) cc.tasks = (local && local.children && local.children[i] && local.children[i].tasks) || (appData.children[i] && appData.children[i].tasks) || JSON.parse(JSON.stringify(i===0?DEF_YOUNG:DEF_OLDER));
-      if(!cc.rewards) cc.rewards = (local && local.children && local.children[i] && local.children[i].rewards) || (appData.children[i] && appData.children[i].rewards) || [];
-      if(!cc.weekTasks) cc.weekTasks = (local && local.children && local.children[i] && local.children[i].weekTasks) || (appData.children[i] && appData.children[i].weekTasks) || [];
-      if(!cc.comp) cc.comp = (local && local.children && local.children[i] && local.children[i].comp) || (appData.children[i] && appData.children[i].comp) || {};
-      if(!cc.pts) cc.pts = (local && local.children && local.children[i] && local.children[i].pts) || (appData.children[i] && appData.children[i].pts) || { weekly:0, shop:0 };
+      if(!cc.tasks) cc.tasks = [];
+      if(!cc.rewards) cc.rewards = [];
+      if(!cc.weekTasks) cc.weekTasks = [];
+      if(!cc.comp) cc.comp = {};
+      if(!cc.pts) cc.pts = { weekly:0, shop:0, total:0 };
     });
     // Sacuvaj sliku roditelja iz lokalnih podataka
     if(!cloud.parentImg) {
@@ -614,9 +614,14 @@ function mergeCloudData(cloud) {
       else if(appData.parentImg) cloud.parentImg = appData.parentImg;
     }
     appData = Object.assign({}, appData, cloud);
-    if(!appData.pending) appData.pending = [];
-    if(!appData.archive) appData.archive = [];
-    if(!appData.rewardHistory) appData.rewardHistory = [];
+    
+    // FIREBASE BRIŠE PRAZNE NIZOVE! Object.assign ih ne prebrise ako ne postoje u cloud objektu.
+    // Zato moramo eksplicitno preuzeti iz clouda ili staviti prazan niz.
+    appData.pending = cloud.pending || [];
+    appData.archive = cloud.archive || [];
+    appData.rewards = cloud.rewards || [];
+    appData.rewardHistory = cloud.rewardHistory || [];
+    
     localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
   }
 }
