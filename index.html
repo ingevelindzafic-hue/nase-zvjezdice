@@ -226,7 +226,7 @@
 
 <div id="homeScreen" class="screen active">
 
-  <h1 class="home-title">⭐Nase Zvjezdice <small style="font-size:0.5em; opacity:0.5; vertical-align:middle;">v4.2</small></h1>
+  <h1 class="home-title">⭐Nase Zvjezdice <small style="font-size:0.5em; opacity:0.5; vertical-align:middle;">v4.3</small></h1>
 
   <p style="color:var(--muted); margin-bottom: 30px;">Ko si danas?</p>
 
@@ -305,7 +305,7 @@
 
     <button onclick="goHome()" style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer"><-</button>
 
-    <div><h2 style="font-family:'Baloo 2'">Roditeljski prikaz <small style="font-size:0.6em; opacity:0.7;">v4.2</small></h2><p id="parentHeaderDate" style="font-size:0.8rem; opacity:0.8"></p></div>
+    <div><h2 style="font-family:'Baloo 2'">Roditeljski prikaz <small style="font-size:0.6em; opacity:0.7;">v4.3</small></h2><p id="parentHeaderDate" style="font-size:0.8rem; opacity:0.8"></p></div>
 
   </div>
 
@@ -572,9 +572,7 @@ function load() {
           if (!appData.children[i]) return;
           var def = (i === 0) ? DEF_YOUNG : DEF_OLDER;
           if(!c.tasks) c.tasks = JSON.parse(JSON.stringify(def));
-          def.forEach(dt => {
-            if(!c.tasks.find(st => st.id === dt.id)) c.tasks.push(dt);
-          });
+          // Ne dodajemo automatski zadatke ako vec postoje neki
           // FORCE NEW IMAGES AND NAMES (important!)
           c.img = appData.children[i].img;
           c.name = appData.children[i].name;
@@ -598,9 +596,7 @@ function load() {
     if(!c.comp) c.comp = {};
     if(!c.pts) c.pts = { daily:0, shop:0, total:0 };
         if(c.pts.weekly !== undefined) { c.pts.daily = c.pts.daily || c.pts.weekly || 0; delete c.pts.weekly; }
-    def.forEach(dt => {
-      if(!c.tasks.find(st => st.id === dt.id)) c.tasks.push(dt);
-    });
+    // Ne dodajemo automatski zadatke ako vec postoje neki
   });
 
   checkResets();
@@ -622,6 +618,7 @@ function cloudSafeData() {
 }
 
 function save() {
+  appData.lastSync = Date.now();
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
   } catch(e) {
@@ -639,6 +636,9 @@ function save() {
 
 function mergeCloudData(cloud) {
   if(cloud && cloud.children) {
+    // Ako je cloud stariji od trenutnog stanja u memoriji, nista ne diraj
+    if(cloud.lastSync && appData.lastSync && cloud.lastSync <= appData.lastSync) return;
+
     var local = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
     // Sacuvaj slike djece iz lokalnih podataka
     cloud.children.forEach((cc, i) => {
@@ -658,7 +658,14 @@ function mergeCloudData(cloud) {
       if(local && local.parentImg) cloud.parentImg = local.parentImg;
       else if(appData.parentImg) cloud.parentImg = appData.parentImg;
     }
-    appData = Object.assign({}, appData, cloud);
+    
+    // Pazljivo spajanje: Cloud podaci su primarni, ali cuvamo lokalni appData za fallback
+    var merged = Object.assign({}, appData, cloud);
+    
+    // Ako cloud nema pin ili je defaultni, a mi imamo lokalni, zadrzi lokalni (samo ako je cloud stariji, ali to smo vec gore provjerili)
+    if(!cloud.pin || cloud.pin === '1234') merged.pin = appData.pin;
+
+    appData = merged;
     
     appData.pending = ensureArray(cloud.pending);
     appData.archive = ensureArray(cloud.archive);
