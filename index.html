@@ -952,6 +952,9 @@ function markTask(tid) {
 
   if(!c.comp) c.comp = {};
 
+  // Zastita od dvostrukog klika i dupliranja zahtjeva
+  if(c.comp[tid] === 'pending' || appData.pending.find(p => p.tId === tid && p.cIdx === window.curIdx)) return;
+
   c.comp[tid] = 'pending';
 
   appData.pending.push({ id: Date.now(), cIdx: window.curIdx, tId: tid, tName: t.name, pts: t.pts });
@@ -1402,7 +1405,8 @@ function approveTask(idx, isYes) {
 
   } else { delete c.comp[p.tId]; }
 
-  appData.pending.splice(idx, 1);
+  // Ukloni ovaj i SVE duple zahtjeve za ovaj isti zadatak i ovo isto dijete (čisti zaglavljene bugove)
+  appData.pending = appData.pending.filter(item => !(item.tId === p.tId && item.cIdx === p.cIdx));
 
   save(); renderParent();
 
