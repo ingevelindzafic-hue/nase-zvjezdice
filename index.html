@@ -226,7 +226,7 @@
 
 <div id="homeScreen" class="screen active">
 
-  <h1 class="home-title">⭐Nase Zvjezdice <small style="font-size:0.5em; opacity:0.5; vertical-align:middle;">v5.2</small></h1>
+  <h1 class="home-title">⭐Nase Zvjezdice <small style="font-size:0.5em; opacity:0.5; vertical-align:middle;">v5.4</small></h1>
 
   <p style="color:var(--muted); margin-bottom: 30px;">Ko si danas?</p>
 
@@ -305,7 +305,7 @@
 
     <button onclick="goHome()" style="background:none; border:none; color:white; font-size:1.5rem; cursor:pointer"><-</button>
 
-    <div><h2 style="font-family:'Baloo 2'">Roditeljski prikaz <small style="font-size:0.6em; opacity:0.7;">v5.2</small></h2><p id="parentHeaderDate" style="font-size:0.8rem; opacity:0.8"></p></div>
+    <div><h2 style="font-family:'Baloo 2'">Roditeljski prikaz <small style="font-size:0.6em; opacity:0.7;">v5.4</small></h2><p id="parentHeaderDate" style="font-size:0.8rem; opacity:0.8"></p></div>
 
   </div>
 
@@ -478,7 +478,8 @@ var DEFAULT_REWARDS = [
 ];
 
 var appData = {
-
+  isReady: false,
+  isFromCloud: false,
   pin: '1234',
   rewards: JSON.parse(JSON.stringify(DEFAULT_REWARDS)),
   children: [
@@ -548,14 +549,16 @@ function checkResets() {
     appData.archive.push(entry);
 
     appData.pending = [];
-
+    
+    appData.lastMonth = curM;
+    appData.lastDay = curD;
+    save(); // Snimamo samo ako je doslo do promjene dana
+  } else {
+    // Ako nije doslo do promjene, samo tiho azuriraj lokalni datum ako fali
+    appData.lastMonth = curM;
+    appData.lastDay = curD;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
   }
-
-  appData.lastMonth = curM;
-
-  appData.lastDay = curD;
-
-  save();
 
 }
 
@@ -596,21 +599,17 @@ function load() {
 
   appData.rewards = ensureArray(appData.rewards, JSON.parse(JSON.stringify(DEFAULT_REWARDS)));
 
-  // Ensure tasks and pts are ALWAYS initialized for all children (fixes fresh start crash)
-  appData.children.forEach((c, i) => {
-    var def = (i === 0) ? DEF_YOUNG : DEF_OLDER;
-    if(!c.tasks) c.tasks = JSON.parse(JSON.stringify(def));
-    if(!c.weekTasks) c.weekTasks = [];
-    if(!c.comp) c.comp = {};
-    if(!c.pts) c.pts = { daily:0, shop:0, total:0 };
-        if(c.pts.weekly !== undefined) { c.pts.daily = c.pts.daily || c.pts.weekly || 0; delete c.pts.weekly; }
-    // Ne dodajemo automatski zadatke ako vec postoje neki
-  });
-
-  checkResets();
-
-  renderHome();
-
+  // NE zovemo checkResets i renderHome odmah, cekamo Cloud!
+  setTimeout(() => {
+    if(!appData.isReady) {
+      console.log("Sistem nije dobio odgovor od Clouda, aktiviram lokalni rad...");
+      appData.isReady = true;
+      appData.isFromCloud = false; // Nismo dobili sa Clouda
+      checkResets();
+      renderHome();
+      setSyncStatus('timeout');
+    }
+  }, 7000); // Povećavamo na 7 sekundi radi sigurnosti
 }
 
 // Uklanja base64 slike (prevelike za cloud) prije slanja na Firebase
@@ -626,6 +625,18 @@ function cloudSafeData() {
 }
 
 function save() {
+  // KOČNICA: Ne dozvoli snimanje na Cloud ako podaci još nisu učitani
+  if(!appData.isReady) {
+    console.warn("Blokiram save: Sinhronizacija još nije spremna.");
+    return;
+  }
+  
+  // Ako nemamo podatke sa Clouda, a lokalni su praktično prazni, ne piši po Cloudu
+  if(!appData.isFromCloud && (!appData.lastDay || appData.children[0].pts.total === 0)) {
+     console.log("Tiho snimanje samo lokalno (Cloud zaštita)...");
+     localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+     return;
+  }
   appData.lastSync = Date.now();
   var timeStr = new Date().toLocaleTimeString();
   var statusEl = document.getElementById('lastSaveTime');
@@ -701,7 +712,21 @@ function mergeCloudData(cloud) {
       appData.rewards = ensureArray(appData.rewards, JSON.parse(JSON.stringify(DEFAULT_REWARDS)));
     }
     
+    appData.isReady = true; // SADA smo spremni za rad
+    appData.isFromCloud = true; // Potvrđeno sa Clouda
     localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+    
+    // Tek sada iscrtavamo ekran sa svježim podacima
+    checkResets();
+    renderHome();
+    if(document.getElementById('parentScreen').classList.contains('active')) renderParent();
+    if(document.getElementById('childScreen').classList.contains('active')) renderChild();
+  } else if(cloud === null) {
+    // Cloud je prazan (prvi put ikad), dozvoli rad
+    appData.isReady = true;
+    appData.isFromCloud = true; // Smatramo ga "cloud izvorom" jer je cloud prazan i možemo pisati
+    checkResets();
+    renderHome();
   }
 }
 
@@ -727,6 +752,7 @@ function setSyncStatus(s) {
   if(s === 'ok')      { el.textContent = '✅ Spojeno ⚡'; el.style.color = '#059669'; }
   if(s === 'saving')  { el.textContent = '🔄 Sinhronizacija...'; el.style.color = '#D97706'; }
   if(s === 'offline') { el.textContent = '⚠️ Bez interneta'; el.style.color = '#DC2626'; }
+  if(s === 'timeout') { el.textContent = '⏳ Lokalni rad (Cloud spor)'; el.style.color = '#6B7280'; }
 }
 
 function forceSyncToCloud() {
