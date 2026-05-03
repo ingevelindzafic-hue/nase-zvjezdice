@@ -225,6 +225,7 @@
 </div>
 
 <div id="childScreen" class="screen">
+  <input type="file" id="childPhotoInput" accept="image/*" style="display:none" onchange="handleChildPhoto(this)">
 
   <div class="child-header">
 
@@ -535,7 +536,11 @@ function load() {
 
         var def = (i === 0) ? DEF_YOUNG : DEF_OLDER;
 
-        // Ensure new spiritual tasks are added
+        if(!c.tasks) c.tasks = JSON.parse(JSON.stringify(def));
+        if(!c.rewards) c.rewards = [];
+        if(!c.weekTasks) c.weekTasks = [];
+        if(!c.comp) c.comp = {};
+        if(!c.pts) c.pts = { weekly:0, shop:0 };
 
         def.forEach(dt => {
 
@@ -596,6 +601,12 @@ function mergeCloudData(cloud) {
         cc.img = local.children[i].img;
       else if(appData.children[i] && appData.children[i].img)
         cc.img = appData.children[i].img;
+
+      if(!cc.tasks) cc.tasks = (local && local.children && local.children[i] && local.children[i].tasks) || (appData.children[i] && appData.children[i].tasks) || JSON.parse(JSON.stringify(i===0?DEF_YOUNG:DEF_OLDER));
+      if(!cc.rewards) cc.rewards = (local && local.children && local.children[i] && local.children[i].rewards) || (appData.children[i] && appData.children[i].rewards) || [];
+      if(!cc.weekTasks) cc.weekTasks = (local && local.children && local.children[i] && local.children[i].weekTasks) || (appData.children[i] && appData.children[i].weekTasks) || [];
+      if(!cc.comp) cc.comp = (local && local.children && local.children[i] && local.children[i].comp) || (appData.children[i] && appData.children[i].comp) || {};
+      if(!cc.pts) cc.pts = (local && local.children && local.children[i] && local.children[i].pts) || (appData.children[i] && appData.children[i].pts) || { weekly:0, shop:0 };
     });
     // Sacuvaj sliku roditelja iz lokalnih podataka
     if(!cloud.parentImg) {
@@ -660,6 +671,28 @@ function forceSyncToCloud() {
 
 function uploadParentPhoto() {
   document.getElementById('parentPhotoInput').click();
+}
+
+function uploadChildPhoto() {
+  document.getElementById('childPhotoInput').click();
+}
+
+function handleChildPhoto(input) {
+  var file = input.files[0];
+  if(!file) return;
+  compressImage(file, function(dataUrl) {
+    appData.children[window.curIdx].img = dataUrl;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+    } catch(e) {
+      console.error(e);
+      alert('Greška! Slika je prevelika.');
+      return;
+    }
+    renderChild();
+    save();
+    alert('✅ Tvoja slika je sačuvana!');
+  });
 }
 
 function compressImage(file, callback) {
@@ -768,15 +801,18 @@ function renderChild() {
 
   if(c.img) {
 
-    bigAv.innerHTML = `<div class="profile-avatar" style="width:100px; height:100px; margin:0 auto">
+    bigAv.innerHTML = `<div class="profile-avatar" style="width:100px; height:100px; margin:0 auto; position:relative; cursor:pointer;" onclick="uploadChildPhoto()">
 
       <img src="${c.img}" class="profile-img" onerror="this.style.display='none'; this.parentElement.innerHTML='${c.emoji}'">
-
+      <div style="position:absolute; bottom:-5px; right:-5px; background:var(--purple); color:white; border-radius:50%; width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-size:14px; box-shadow:0 2px 5px rgba(0,0,0,0.3)">📷</div>
     </div>`;
 
   } else {
 
-    bigAv.textContent = c.emoji;
+    bigAv.innerHTML = `<div class="profile-avatar" style="width:100px; height:100px; margin:0 auto; position:relative; cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:50px;" onclick="uploadChildPhoto()">
+      ${c.emoji}
+      <div style="position:absolute; bottom:-5px; right:-5px; background:var(--purple); color:white; border-radius:50%; width:30px; height:30px; display:flex; align-items:center; justify-content:center; font-size:14px; box-shadow:0 2px 5px rgba(0,0,0,0.3)">📷</div>
+    </div>`;
 
   }
 
