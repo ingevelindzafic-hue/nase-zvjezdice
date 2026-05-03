@@ -319,7 +319,7 @@
       <p style="font-size:0.82rem; color:var(--muted); margin-bottom:14px;">
         Dodajte svoju fotografiju — čuvat će se lokalno na ovom telefonu.
       </p>
-      <input type="file" id="parentPhotoInput" accept="image/*" capture="environment"
+      <input type="file" id="parentPhotoInput" accept="image/*"
         style="display:none" onchange="handleParentPhoto(this)">
       <button onclick="uploadParentPhoto()" style="
         background: linear-gradient(135deg, var(--pink), var(--orange));
@@ -572,7 +572,15 @@ function cloudSafeData() {
 }
 
 function save() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+  } catch(e) {
+    console.error("Lokalna memorija puna:", e);
+    appData.parentImg = "";
+    appData.children.forEach(c => { c.img = ""; });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+    alert('Slika je bila prevelika pa je uklonjena! Pokusajte ponovo sa manjom slikom.');
+  }
   setSyncStatus('saving');
   db.ref(DB_REF).set(cloudSafeData())
     .then(() => setSyncStatus('ok'))
@@ -595,6 +603,9 @@ function mergeCloudData(cloud) {
       else if(appData.parentImg) cloud.parentImg = appData.parentImg;
     }
     appData = Object.assign({}, appData, cloud);
+    if(!appData.pending) appData.pending = [];
+    if(!appData.archive) appData.archive = [];
+    if(!appData.rewardHistory) appData.rewardHistory = [];
     localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
   }
 }
@@ -606,8 +617,10 @@ function startFirebaseSync() {
       mergeCloudData(cloud);
       var homeActive = document.getElementById('homeScreen').classList.contains('active');
       var parentActive = document.getElementById('parentScreen').classList.contains('active');
+      var childActive = document.getElementById('childScreen').classList.contains('active');
       if(homeActive) renderHome();
       if(parentActive) renderParent();
+      if(childActive) renderChild();
     }
     setSyncStatus('ok');
   }, () => setSyncStatus('offline'));
@@ -649,20 +662,49 @@ function uploadParentPhoto() {
   document.getElementById('parentPhotoInput').click();
 }
 
+function compressImage(file, callback) {
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var img = new Image();
+    img.onload = function() {
+      var canvas = document.createElement('canvas');
+      var max_size = 400;
+      var w = img.width;
+      var h = img.height;
+      if (w > h) {
+        if (w > max_size) { h *= max_size / w; w = max_size; }
+      } else {
+        if (h > max_size) { w *= max_size / h; h = max_size; }
+      }
+      canvas.width = w;
+      canvas.height = h;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      callback(canvas.toDataURL('image/jpeg', 0.8));
+    };
+    img.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
 function handleParentPhoto(input) {
   var file = input.files[0];
   if(!file) return;
-  var reader = new FileReader();
-  reader.onload = function(e) {
-    appData.parentImg = e.target.result;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+  compressImage(file, function(dataUrl) {
+    appData.parentImg = dataUrl;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+    } catch(e) {
+      console.error(e);
+      alert('Greska! Slika je prevelika.');
+      return;
+    }
     // Osvjezi prikaz
     var pAv = document.getElementById('parentAvatarHome');
     if(pAv) pAv.innerHTML = '<img src="' + appData.parentImg + '" class="profile-img">';
     renderParent();
     alert('✅ Slika roditelja je sacuvana!');
-  };
-  reader.readAsDataURL(file);
+  });
 }
 
 
@@ -823,7 +865,7 @@ function renderChild() {
 
 function renderTaskCard(t, child, isSpirit) {
 
-  var status = child.comp[t.id];
+  var status = child.comp ? child.comp[t.id] : undefined;
 
   var cls = status === 'pending' ? 'pending-approval' : (status === 'done' ? 'done' : '');
 
@@ -866,6 +908,8 @@ function markTask(tid) {
   var c = appData.children[window.curIdx];
 
   var t = c.tasks.find(x => x.id == tid);
+
+  if(!c.comp) c.comp = {};
 
   c.comp[tid] = 'pending';
 
