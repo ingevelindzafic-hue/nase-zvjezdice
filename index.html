@@ -210,7 +210,7 @@
   /* ========= REWARD STORE ========= */
   .store-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 15px 20px; }
   .reward-item { background: var(--card); border-radius: 18px; padding: 16px 12px; text-align: center; box-shadow: var(--shadow); border: 2px solid var(--border); display: flex; flex-direction: column; align-items: center; gap: 6px; transition: transform 0.15s; }
-  .reward-item.can-afford { border-color: var(--success); background: linear-gradient(135deg, #F0FDF4, #DCFCE7); }
+  .reward-item.can-afford { border-color: var(--success); background: #DCFCE7; } /* Svijetlo zelena pozadina za dostupne nagrade */
   .reward-emoji { font-size: 2.5rem; }
   .reward-name { font-weight: 800; font-size: 0.85rem; }
   .reward-price { font-weight: 700; font-size: 0.8rem; color: var(--purple); }
@@ -976,7 +976,7 @@ function renderChild() {
   var rewardsHtml = (appData.rewards || []).map(r => {
     var can = c.pts.total >= r.pts;
     return `
-      <div class="reward-item ${can ? 'can-afford' : ''}" style="${r.pts >= 100 ? 'border-color:#F59E0B; background:#FFFBEB' : ''}">
+      <div class="reward-item ${can ? 'can-afford' : ''}">
         <span class="reward-emoji">${r.emoji}</span>
         <div class="reward-name">${r.name}</div>
         <div class="reward-price">${r.pts} ⭐</div>
