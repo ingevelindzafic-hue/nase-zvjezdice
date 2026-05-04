@@ -508,7 +508,7 @@ var appData = {
 
   pending: [], lastSync: 0, archive: [],
 
-  lastWeek: null, lastMonth: null
+  lastWeek: null, lastMonth: null, lastDay: null
 
 };
 
@@ -525,41 +525,43 @@ function getWeekKey() {
 }
 
 function checkResets() {
-
   var curM = new Date().getMonth();
-
   var curD = new Date().toDateString();
 
-  if(appData.lastDay && appData.lastDay !== curD) {
+  console.log("Provjera datuma: Lokalni =", appData.lastDay, "| Stvarni =", curD);
 
-    // Save to archive before reset
+  // Ako datum uopšte nije postavljen (prvi put ikad), samo ga zabilježi bez reseta
+  if(!appData.lastDay) {
+    console.log("Inicijalno postavljanje datuma.");
+    appData.lastDay = curD;
+    appData.lastMonth = curM;
+    save(true); // Forsiramo snimanje inicijalnog datuma na cloud
+    return;
+  }
+
+  if(appData.lastDay !== curD) {
+    console.log("DETEKTOVAN NOVI DAN! Pokrećem reset zadataka...");
 
     var entry = { type:'day', key: appData.lastDay, scores: [] };
 
     appData.children.forEach(c => {
-
       entry.scores.push({ name: c.name, pts: c.pts.daily });
-
-      c.pts.daily = 0; // Reset pts for new day
-
-      c.comp = {}; // Clear completions for new day
-
+      c.pts.daily = 0; 
+      c.comp = {}; 
     });
 
     appData.archive.push(entry);
-
     appData.pending = [];
     
     appData.lastMonth = curM;
     appData.lastDay = curD;
-    save(); // Snimamo samo ako je doslo do promjene dana
-  } else {
-    // Ako nije doslo do promjene, samo tiho azuriraj lokalni datum ako fali
-    appData.lastMonth = curM;
-    appData.lastDay = curD;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
+    
+    // Forsiramo snimanje na Cloud jer je ovo legitiman reset dana
+    save(true); 
+    console.log("Reset uspješno izvršen i snimljen na Cloud.");
+    
+    if(window.curIdx !== undefined) renderChild(); else renderHome();
   }
-
 }
 
 function load() {
@@ -624,7 +626,7 @@ function cloudSafeData() {
   return safe;
 }
 
-function save() {
+function save(force = false) {
   // KOČNICA: Ne dozvoli snimanje na Cloud ako podaci još nisu učitani
   if(!appData.isReady) {
     console.warn("Blokiram save: Sinhronizacija još nije spremna.");
@@ -632,7 +634,8 @@ function save() {
   }
   
   // Ako nemamo podatke sa Clouda, a lokalni su praktično prazni, ne piši po Cloudu
-  if(!appData.isFromCloud && (!appData.lastDay || appData.children[0].pts.total === 0)) {
+  // 'force' parametar nam omogućava da zaobiđemo ovo tokom reseta dana
+  if(!force && !appData.isFromCloud && (!appData.lastDay || appData.children[0].pts.total === 0)) {
      console.log("Tiho snimanje samo lokalno (Cloud zaštita)...");
      localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
      return;
@@ -649,7 +652,7 @@ function save() {
     appData.parentImg = "";
     appData.children.forEach(c => { c.img = ""; });
     localStorage.setItem(STORAGE_KEY, JSON.stringify(appData));
-    alert('Slika je bila prevelika pa je uklonjena! Pokusajte ponovo sa manjom slikom.');
+    alert('Slika je bila prevelika pa je uklonjena!');
   }
   setSyncStatus('saving');
   db.ref(DB_REF).set(cloudSafeData())
@@ -1296,11 +1299,7 @@ function renderManage() {
         </div>
 
         <div style="display:flex; gap:8px; margin-top:12px">
-
           <button class="tab-btn active" style="font-size:0.75rem; flex:1" onclick="showAddTaskModal(${ci},'daily')">+ Novi Dnevni</button>
-
-          <button class="tab-btn active" style="font-size:0.75rem; flex:1" onclick="showAddTaskModal(${ci},'weekly')">+ Novi Sedmicni</button>
-
         </div>
 
       </div>
