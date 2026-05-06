@@ -374,6 +374,22 @@
       <div id="forceSyncStatus" style="margin-top:12px; font-weight:700; font-size:0.82rem;"></div>
     </div>
 
+    <!-- Ručni reset dana -->
+    <div class="manage-section" style="text-align:center; padding:20px 15px; border: 2px solid #FEE2E2;">
+      <div style="font-size:1.5rem; margin-bottom:6px;">🌅</div>
+      <h3 style="color:#DC2626; margin-bottom:8px;">Ručni reset dana</h3>
+      <p style="font-size:0.82rem; color:var(--muted); margin-bottom:14px;">
+        Ako se zadaci nisu sami obrisali jutros, kliknite ovdje da ih očistite ručno.
+      </p>
+      <button onclick="manualResetDay()" style="
+        background: #FEE2E2;
+        color: #DC2626; border: 2px solid #F87171; padding: 12px 24px;
+        border-radius: 14px; font-weight: 900; font-size: 0.95rem;
+        cursor: pointer; width: 100%; max-width: 280px;">
+        🧹 Resetuj današnje zadatke
+      </button>
+    </div>
+
   </div>
 
 </div>
@@ -1592,6 +1608,38 @@ function showAddTaskModal(ci, freq) {
 
   }
 
+}
+
+function manualResetDay() {
+  if(confirm('Jeste li sigurni da želite ručno resetovati današnje zadatke? \n\nOvo će obrisati sve kvačice za danas i prebaciti trenutne bodove u historiju. Bodovi u novčaniku ostaju sigurni.')) {
+    var curM = new Date().getMonth();
+    var curD = new Date().toDateString();
+
+    console.log("RUČNI RESET POKRENUT...");
+
+    var entry = { type:'day', key: curD + ' (ručno)', scores: [] };
+
+    appData.children.forEach(c => {
+      entry.scores.push({ name: c.name, pts: c.pts.daily });
+      c.pts.daily = 0; 
+      c.comp = {}; 
+    });
+
+    appData.archive.push(entry);
+    appData.pending = [];
+    
+    appData.lastMonth = curM;
+    appData.lastDay = curD;
+    
+    save(true); 
+    alert('Zadaci su uspješno resetovani!');
+    
+    if(window.curIdx !== undefined) renderChild(); else renderHome();
+    if(document.getElementById('parentScreen').classList.contains('active')) {
+        renderParent();
+        switchTab('approvals', document.querySelector('.tab-btn')); // Vrati na prvi tab da se vidi promjena
+    }
+  }
 }
 
 window.onload = function() {
